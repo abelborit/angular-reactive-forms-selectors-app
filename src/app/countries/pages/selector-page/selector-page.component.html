@@ -1,2 +1,37 @@
-<h1>Reactive Forms - Selectors</h1>
+<h1>Reactive Forms - Selectores Anidados</h1>
 <hr />
+
+<form [formGroup]="myForm">
+  <!-- Región - Continentes -->
+  <div class="row mb-3">
+    <div class="col">
+      <label class="form-label">Continente:</label>
+      <select class="form-control" formControlName="region">
+        <option value="">-- Seleccine Continente --</option>
+      </select>
+    </div>
+  </div>
+</form>
+
+<br />
+<hr />
+<p><b>Form - Valid: </b>{{ myForm.valid }}</p>
+<p><b>Form - Status: </b>{{ myForm.status }}</p>
+<p><b>Form - Pending: </b>{{ myForm.pending }}</p>
+
+<p><b>Form - Errors:</b></p>
+<pre>{{ myForm.errors | json }}</pre>
+<hr />
+
+<span><b>Form - Value</b></span>
+<pre>{{ myForm.value | json }}</pre>
+
+<!-- ******************************************************************************************************************* -->
+<!-- Directivas en HTML -->
+<!--
+Las directivas son atributos que se aplican a elementos HTML para extender su funcionalidad o modificar su comportamiento y apariencia. Esto significa que cualquier atributo que no sea el nombre del tag se considera una directiva.
+
+Las directivas incluyen tanto atributos personalizados como atributos estándar de HTML que se utilizan para agregar funcionalidades adicionales o aplicar estilos específicos a los elementos. Los atributos estándar de HTML como class, style, type, placeholder, etc, pueden interactuar con las directivas de Angular para lograr efectos deseados en la aplicación.
+
+Además de estos atributos, también existen las directivas estructurales como *ngIf y *ngFor, que permiten alterar la estructura del DOM basándose en condiciones o iterar sobre colecciones de datos.
+-->
