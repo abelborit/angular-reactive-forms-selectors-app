@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { CountriesService } from '../../services/countries.service';
 import { Region, SmallCountry } from '../../interfaces/country.interface';
-import { switchMap } from 'rxjs';
+import { switchMap, tap } from 'rxjs';
 
 @Component({
   selector: 'app-selector-page',
@@ -47,6 +47,8 @@ export class SelectorPageComponent implements OnInit {
     this.myForm
       .get('region')
       ?.valueChanges.pipe(
+        /* cuando cambia la región entonces el primer paso es que la propiedad de country de myForm sea un string vacío para que pueda tomar la opción de <option value="">-- Seleccine País --</option>. Aquí sería una función normal porque no usaremos el response entonces también se podría eliminar del argumento */
+        tap(() => this.myForm.get('country')?.setValue('')),
         switchMap((region) => {
           console.log({ region });
           return this.countriesService.getCountriesByRegion(region);
