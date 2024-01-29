@@ -1,5 +1,10 @@
 import { Component, OnInit } from '@angular/core';
-import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import {
+  FormBuilder,
+  FormGroup,
+  ValidatorFn,
+  Validators,
+} from '@angular/forms';
 import { CountriesService } from '../../services/countries.service';
 import { Region, SmallCountry } from '../../interfaces/country.interface';
 import { filter, switchMap, tap } from 'rxjs';
@@ -66,13 +71,37 @@ export class SelectorPageComponent implements OnInit {
       });
   }
 
+  private _addValidators(
+    field: string,
+    validators: ValidatorFn | ValidatorFn[]
+  ) {
+    this.myForm.controls[field].addValidators(validators);
+    this._updateValueAndValidity(field);
+  }
+
+  private _removeValidators(
+    field: string,
+    validators: ValidatorFn | ValidatorFn[]
+  ) {
+    this.myForm.controls[field].removeValidators(validators);
+    this._updateValueAndValidity(field);
+  }
+
+  private _updateValueAndValidity(field: string) {
+    /* permite hacer efecto la actualización de los validadores que se hicieron en tiempo de ejecución */
+    this.myForm.controls[field].updateValueAndValidity();
+  }
+
   handleCountryChanged(): void {
     this.myForm
       .get('country')
       ?.valueChanges.pipe(
         tap(() => this.myForm.get('borders')?.setValue('')),
         /* se coloca este filter ya que por ejemplo en getCountriesByRegion se colocó un condicional if() para evaluar si se envía algún valor y evitar un error en la solicitud pero también en este caso se puede hacer de esta forma con un filter para que si retorna un true entonces siga con la ejecución de los siguientes operadores RxJS pero si retorna un false entonces ya no continúa y no realiza ninguna emisión a la cual suscribirse */
-        filter((value: string) => value.length > 0),
+        filter((alphaCode: string) => {
+          console.log({ alphaCode, isValid: alphaCode.length > 0 });
+          return alphaCode.length > 0;
+        }),
         /* aquí se coloca como alphaCode ya que en los value de las options se colocó el cca3 que sería este código */
         switchMap((alphaCode) => {
           console.log({ alphaCode });
@@ -81,6 +110,13 @@ export class SelectorPageComponent implements OnInit {
         /* aquí se coloca como country ya que el switchMap anterior nos está dando un Observable<SmallCountry> que sería el país y de ahí sacamos los borders */
         switchMap((country) =>
           this.countriesService.getCountryBordersByCodes(country.borders)
+        ),
+        /* cuando se selecciona un país que no tiene fronteras, por ejemplo: Americas/Antigua and Barbuda, el formulario queda en inválido (false) y es por que al construir el formulario reactivo dijimos que los tres campos: region, country y borders serían requeridos. Lo que debería pasar es que si un país no tiene fronteras o borders, el formulario debería ser válido, obviamente habiendo seleccionado previamente la región y el country */
+        /* si vienen los países, que son los bordes mismos, entonces agregamos la validación, caso contrario lo eliminamos */
+        tap((countries) =>
+          countries.length > 0
+            ? this._addValidators('borders', Validators.required)
+            : this._removeValidators('borders', Validators.required)
         )
       )
       .subscribe((countries) => {
@@ -89,6 +125,11 @@ export class SelectorPageComponent implements OnInit {
       });
   }
 }
+
+/* ******************************************************************************************************************* */
+/* En la implementación de los Validators ¿Hay alguna razón por la cual se vuelve agregar el validators a "borders" cuando la condicion en el tap cae en true ya que se manda a llamar la funcion que le vuelve agregar esta condicion que ya tiene por default? */
+/* Precisamente es para dar solución al problema cuando un país no tiene fronteras. La situación que se menciona en la pregunta es en el caso de que el país que se ha seleccionado sí tiene fronteras, entonces aplica lo que se menciona en la pregunta, el de volver a agregar la condición que ya viene por defecto. Pero, supongamos que seleccionas un país que no tiene fronteras, tal como se mencionó, por ejemplo Americas/Antigua and Barbuda, entonces, según la condición sería eliminar el validador required para decirle a Angular que el formulario es válido. Ahora, aquí es importante volver a agregar el validador cuando selecciones un país que sí tiene fronteras, pues lo acabas de eliminar. Finalmente, si estamos en el caso de que se selecciona un país con fronteras, sí volverá a agregar el validador required, no hay problema, según la documentación de Angular:
+  - "Agregar un validador que ya existe no tendrá ningún efecto. Si hay funciones de validación duplicadas en la matriz de validadores, solo se agregará la primera instancia a un control de formulario." */
 
 /* ******************************************************************************************************************* */
 /*
