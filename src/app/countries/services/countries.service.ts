@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Country, Region, SmallCountry } from '../interfaces/country.interface';
-import { Observable, map, of, tap } from 'rxjs';
+import { Observable, combineLatest, map, of, tap } from 'rxjs';
 import { HttpClient } from '@angular/common/http';
 
 /* FORMA 1: al usar el HttpClient se tiene que importar el HttpClientModule pero darse cuenta que este servicio de CountriesService se puede utilizar a lo largo de toda la aplicación debido al { providedIn: 'root' } y por eso el HttpClientModule se tendría que colcoar en los imports de app.module.ts que es de forma global */
@@ -48,5 +48,36 @@ export class CountriesService {
       ),
       tap((countries) => console.log({ countries }))
     );
+  }
+
+  getCountryByAlphaCode(alphaCode: string): Observable<SmallCountry> {
+    const url = `${this.baseURL}/alpha/${alphaCode}?fields=cca3,name,borders`;
+
+    return this.httpClient.get<Country>(url).pipe(
+      map((country) => ({
+        name: country.name.common,
+        cca3: country.cca3,
+        borders: country.borders ?? [],
+      })),
+      tap((country) => console.log({ country }))
+    );
+  }
+
+  /* aquí se van a obtener los nombres de las fronteras o borders que se pasen, pero nosotros ya tenemos una función la cual es getCountryByAlphaCode que según el alphaCode nos regresa datos sobre ese país y estos borders son un arreglo de esos códigos, entonces por cada código que tenga borders se tendría que disparar la función getCountryByAlphaCode y para esto getCountryBordersByCodes nos regresará un observable que emita un arreglo de SmallCountry */
+  getCountryBordersByCodes(borders: string[]): Observable<SmallCountry[]> {
+    /* cláusula de seguridad */
+    if (!borders || borders.length === 0) return of([]);
+
+    /* este countriesRequests será un arreglo con las respuestas que nos dará cada código de borders al ejecutar la función getCountryByAlphaCode, entonces como la función getCountryByAlphaCode nos regresa un Observable<SmallCountry> este countriesRequests será un Observable<SmallCountry> pero como arreglo, es decir, arreglo de observables que emitan algo de tipo SmallCountry y este no se va a disparar hasta que no se suscriba, entonces no hay problema. Como referencia, este Observable<SmallCountry>[] sería como un Promise[] para luego usar un Promise.all() */
+    const countriesRequests: Observable<SmallCountry>[] = [];
+
+    /* ejecutar por cada código que tenga borders */
+    borders.forEach((code) => {
+      const request = this.getCountryByAlphaCode(code);
+      countriesRequests.push(request);
+    });
+
+    /* a este combineLatest() que es de RxJS, le tenemos que mandar nuestro conjunto de observables y al final nos suscribiremos que en este caso será cuando se mande a llamar a la función getCountryBordersByCodes.Este combineLatest va a emitir hasta que todos los observables del arreglo que se está mandando emitan un valor. Todos se disparan de manera simultanea */
+    return combineLatest(countriesRequests);
   }
 }

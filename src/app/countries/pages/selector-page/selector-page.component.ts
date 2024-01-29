@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { CountriesService } from '../../services/countries.service';
 import { Region, SmallCountry } from '../../interfaces/country.interface';
-import { switchMap, tap } from 'rxjs';
+import { filter, switchMap, tap } from 'rxjs';
 
 @Component({
   selector: 'app-selector-page',
@@ -26,6 +26,7 @@ export class SelectorPageComponent implements OnInit {
 
     /* se mandará la función/método por aquí para hacerlo más simple */
     this.handleRegionChanged();
+    this.handleCountryChanged();
   }
 
   public myForm: FormGroup = this.formBuilder.nonNullable.group({
@@ -35,6 +36,7 @@ export class SelectorPageComponent implements OnInit {
   });
 
   public countriesByRegion: SmallCountry[] = [];
+  public borders: SmallCountry[] = [];
 
   /* con eso se está usando el servicio CountriesService que es privado y sus propiedades como en este caso. Hacerlo de esta forma no afecta por crear nuevos espacios en memoria ya que esto apunta al espacio en memoria que ya tiene this.countriesService.getRegions, es decir, que this.countriesService.getRegions pasa por referencia para poder utilizarlo aquí */
   get getRegions(): Region[] {
@@ -49,6 +51,7 @@ export class SelectorPageComponent implements OnInit {
       ?.valueChanges.pipe(
         /* cuando cambia la región entonces el primer paso es que la propiedad de country de myForm sea un string vacío para que pueda tomar la opción de <option value="">-- Seleccine País --</option>. Aquí sería una función normal porque no usaremos el response entonces también se podría eliminar del argumento */
         tap(() => this.myForm.get('country')?.setValue('')),
+        tap(() => (this.borders = [])),
         switchMap((region) => {
           console.log({ region });
           return this.countriesService.getCountriesByRegion(region);
@@ -62,6 +65,29 @@ export class SelectorPageComponent implements OnInit {
         );
       });
   }
+
+  handleCountryChanged(): void {
+    this.myForm
+      .get('country')
+      ?.valueChanges.pipe(
+        tap(() => this.myForm.get('borders')?.setValue('')),
+        /* se coloca este filter ya que por ejemplo en getCountriesByRegion se colocó un condicional if() para evaluar si se envía algún valor y evitar un error en la solicitud pero también en este caso se puede hacer de esta forma con un filter para que si retorna un true entonces siga con la ejecución de los siguientes operadores RxJS pero si retorna un false entonces ya no continúa y no realiza ninguna emisión a la cual suscribirse */
+        filter((value: string) => value.length > 0),
+        /* aquí se coloca como alphaCode ya que en los value de las options se colocó el cca3 que sería este código */
+        switchMap((alphaCode) => {
+          console.log({ alphaCode });
+          return this.countriesService.getCountryByAlphaCode(alphaCode);
+        }),
+        /* aquí se coloca como country ya que el switchMap anterior nos está dando un Observable<SmallCountry> que sería el país y de ahí sacamos los borders */
+        switchMap((country) =>
+          this.countriesService.getCountryBordersByCodes(country.borders)
+        )
+      )
+      .subscribe((countries) => {
+        console.log({ countries });
+        this.borders = countries;
+      });
+  }
 }
 
 /* ******************************************************************************************************************* */
@@ -73,4 +99,38 @@ Aquí se está utilizando el método valueChanges para obtener un observable que
 Si se coloca el subscribe antes del pipe, no se estaría aplicando el operador switchMap al observable obtenido de valueChanges. En cambio, nos estaríamos suscribiéndo directamente al observable valueChanges sin aplicar ninguna transformación. Esto significa que no se estaría manejando el cambio de región como se pretende con el switchMap.
 
 Entonces, el orden correcto sería primero aplicar los operadores de transformación (como pipe con switchMap) y luego suscribirte al observable resultante utilizando el método subscribe.
+*/
+
+/* ******************************************************************************************************************* */
+/* Si deseo mostrar al usuario una alerta de, por ejemplo, que algo salió mal al cargar una lista, ¿Desde dónde tengo que mandar la alerta; desde el componente que realizó la petición ó desde el servicio? */
+/* Sería más adecuado lanzar la alerta desde el componente que realizó la petición. De esta manera, se puede mantener el servicio centrado únicamente en la solicitud de los datos. Por ejemplo, si se está utilizando Sweet Alert, se podría lanzar la alerta directamente desde el componente. Esto permitiría tener una separación más clara de las responsabilidades y facilitaría la gestión de los errores. */
+
+/* ******************************************************************************************************************* */
+/* Los listener de los eventos se hicieron en el OnInit, ¿Es esa el mejor ciclo de vida para usarlo? ¿Se podría usar AfterViewInit ya que en teoria es cuando ya se contruyó el HTML? */
+/* Sí, en este caso nos interesa situarlo dentro del OnInit porque si bien es cierto que el AfterViewInit nos serviría para esperar a que la view estuviera completamente cargada, el AfterViewInit se ejecuta cada vez que esta vista vuelva a ser cargada, es decir, cuando nos movamos entre componentes, el código de este ciclo de vida se dispararía.
+
+El OnInit únicamente se ejecuta la primera vez que carga el componente, y no se volverá a ejecutar hasta que se destruya ese componente que ya existe. Es por eso que nos interesa mantener los listeners en el OnInit, ya que cuando se dispara este ciclo de vida podemos crear ahí los listeners, y nos aseguramos que únicamente es ejecutado el código una vez. */
+
+/* ******************************************************************************************************************* */
+/*  Con respecto a los suscribers de los campos del formulario, ¿Co se debería desuscribir de los observables al momento que el componente se destruya? */
+/*
+Sí sería una práctica recomendable.
+
+Se podría revisar:
+  - https://stackoverflow.com/questions/38008334/angular-rxjs-when-should-i-unsubscribe-from-subscription
+  - https://stackoverflow.com/questions/41364078/angular-2-does-subscribing-to-formcontrols-valuechanges-need-an-unsubscribe
+
+En nuestro caso, almacenaríamos el resultado del this.myForm.get('region')!.valueChanges...subscribe() en una variable, para luego en un OnDestroy, poder hacer los unsubscribes del mismo, por ejemplo (también puedes revisar otras implementaciones como la que comentan en los enlaces adjuntos).
+*/
+
+/* ******************************************************************************************************************* */
+/* Cuando queriamos detectar los cambios en las regiones y paises, hemos puesto esos métodos en el ngOnInit pero ¿Sería también correcto ponerlo en el ngOnChanges? */
+/*
+Se utiliza el método ngOnInit para llamar a las funciones handleRegionChanged() y handleCountryChanged(), que suscriben observables a cambios en los valores de los campos del formulario. Esto se realiza cuando el componente se inicializa.
+
+En cuanto a la pregunta sobre si sería correcto poner esos métodos en el ngOnChanges, la respuesta es que no sería adecuado. El ngOnChanges es un hook del ciclo de vida de Angular que se ejecuta cada vez que una propiedad de entrada del componente cambia su valor. No está diseñado para suscribirse a eventos de formularios o realizar acciones relacionadas con cambios en la interfaz de usuario.
+
+En este caso, los métodos handleRegionChanged() y handleCountryChanged() están suscribiendo observables para detectar cambios en los campos del formulario, y esto es una acción que normalmente se realiza en el ngOnInit, cuando el componente se inicia por primera vez.
+
+El ngOnInit es la opción adecuada y recomendada, de esta manera, nos aseguramos de que las suscripciones se realicen solo una vez al inicializar el componente y evitar posibles problemas de rendimiento y comportamiento no deseado al utilizar el ngOnChanges.
 */
