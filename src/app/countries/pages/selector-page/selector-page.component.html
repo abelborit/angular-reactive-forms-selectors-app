@@ -14,6 +14,22 @@
       </select>
     </div>
   </div>
+
+  <!-- Países -->
+  <div class="row mb-3">
+    <div class="col">
+      <label class="form-label">País:</label>
+      <select class="form-control" formControlName="country">
+        <option value="">-- Seleccine País --</option>
+        <option
+          *ngFor="let country of countriesByRegion"
+          [value]="country.cca3"
+        >
+          {{ country.name }}
+        </option>
+      </select>
+    </div>
+  </div>
 </form>
 
 <br />
